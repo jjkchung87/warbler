@@ -3,9 +3,10 @@ import os
 from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 
-from forms import UserAddForm, LoginForm, MessageForm
-from models import db, connect_db, User, Message
+from forms import UserAddForm, LoginForm, MessageForm, UserUpdateForm
+from models import db, connect_db, User, Message, Follows, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -18,7 +19,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False
-app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
+app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
 toolbar = DebugToolbarExtension(app)
 
@@ -31,7 +32,7 @@ connect_db(app)
 
 @app.before_request
 def add_user_to_g():
-    """If we're logged in, add curr user to Flask global."""
+    """If we're logged in, add curr user to Flask global "g". Used to manage user auth and access control throughout application"""
 
     if CURR_USER_KEY in session:
         g.user = User.query.get(session[CURR_USER_KEY])
@@ -92,8 +93,9 @@ def signup():
 @app.route('/login', methods=["GET", "POST"])
 def login():
     """Handle user login."""
-
+    
     form = LoginForm()
+
 
     if form.validate_on_submit():
         user = User.authenticate(form.username.data,
@@ -112,8 +114,10 @@ def login():
 @app.route('/logout')
 def logout():
     """Handle logout of user."""
-
-    # IMPLEMENT THIS
+    
+    do_logout()
+    flash('Successfully logged out.','success')
+    return redirect('/')
 
 
 ##############################################################################
@@ -208,10 +212,30 @@ def stop_following(follow_id):
 
 
 @app.route('/users/profile', methods=["GET", "POST"])
-def profile():
+def update_profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
+    form = UserUpdateForm(obj = g.user)
+    
+    if not g.user:
+        flash("Access unauthorized.","danger")
+        return redirect("/")    
+
+    if form.validate_on_submit():
+        if not User.authenticate(g.user.username,form.password.data):
+            flash("Incorrect password. Profile update failed.", "danger")
+            return redirect(f'/users/{g.user.id}')
+        g.user.username = form.username.data
+        g.user.email = form.email.data
+        g.user.image_url = form.image_url.data
+        g.user.header_image_url = form.header_image_url.data
+        g.user.bio = form.bio.data
+
+        db.session.commit()
+
+        return redirect(f'/users/{g.user.id}')
+    
+    return render_template('/users/edit.html', form=form)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -278,6 +302,31 @@ def messages_destroy(message_id):
 
     return redirect(f"/users/{g.user.id}")
 
+@app.route('/users/add_like/<int:message_id>', methods=['POST'])
+def messages_like(message_id):
+    """Like a message"""
+
+
+    if not g.user:
+        flash("Access unauthorized","danger")
+        return redirect ('/')
+    
+    msg = Message.query.get_or_404(message_id)
+
+    liked_messages = [like.message_id for like in Likes.query.filter(Likes.user_id == g.user.id).all()]
+
+    if message_id not in liked_messages:
+        g.user.likes.append(msg)
+
+    else:
+        g.user.likes.remove(msg)
+        
+    db.session.commit()
+    return redirect(request.referrer)
+    
+
+
+
 
 ##############################################################################
 # Homepage and error pages
@@ -294,11 +343,14 @@ def homepage():
     if g.user:
         messages = (Message
                     .query
+                    .filter(or_(Message.user_id == g.user.id, Message.user_id.in_(
+                        db.session.query(Follows.user_being_followed_id).filter_by(user_following_id=g.user.id)
+                    )))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
 
-        return render_template('home.html', messages=messages)
+        return render_template('home.html', messages=messages, user=g.user)
 
     else:
         return render_template('home-anon.html')
@@ -311,9 +363,9 @@ def homepage():
 #
 # https://stackoverflow.com/questions/34066804/disabling-caching-in-flask
 
-@app.after_request
+@app.after_request 
 def add_header(req):
-    """Add non-caching headers on every request."""
+    """Add non-caching headers on every request, to ensure client does not cache the response and always requests fresh content from server"""
 
     req.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     req.headers["Pragma"] = "no-cache"
