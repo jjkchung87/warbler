@@ -18,9 +18,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
     os.environ.get('DATABASE_URL', 'postgresql:///warbler'))
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['EXPLAIN_TEMPLATE_LOADING'] = True
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
+app.debug=True
 toolbar = DebugToolbarExtension(app)
 
 connect_db(app)
@@ -180,6 +182,17 @@ def users_followers(user_id):
     user = User.query.get_or_404(user_id)
     return render_template('users/followers.html', user=user)
 
+@app.route('/users/<int:user_id>/likes')
+def show_likes(user_id):
+    """show users liked messages"""
+
+    if not g.user:
+        flash("Access unauthorized","danger")
+        return redirect("/")
+    
+    user = User.query.get_or_404(user_id)
+    return render_template('users/likes.html', user=user)
+
 
 @app.route('/users/follow/<int:follow_id>', methods=['POST'])
 def add_follow(follow_id):
@@ -297,10 +310,15 @@ def messages_destroy(message_id):
         return redirect("/")
 
     msg = Message.query.get(message_id)
-    db.session.delete(msg)
-    db.session.commit()
 
-    return redirect(f"/users/{g.user.id}")
+    if msg.user_id != g.user.id:
+        flash("Not authorized to delete this message","danger")
+        return redirect(request.referrer)
+    
+    else:
+        db.session.delete(msg)
+        db.session.commit()
+        return redirect(f"/users/{g.user.id}")
 
 @app.route('/users/add_like/<int:message_id>', methods=['POST'])
 def messages_like(message_id):
@@ -312,6 +330,10 @@ def messages_like(message_id):
         return redirect ('/')
     
     msg = Message.query.get_or_404(message_id)
+
+    if msg.user_id == g.user.id:
+        flash('Cannot like own message','danger')
+        return redirect('/')
 
     liked_messages = [like.message_id for like in Likes.query.filter(Likes.user_id == g.user.id).all()]
 
