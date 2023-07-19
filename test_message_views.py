@@ -39,17 +39,18 @@ class MessageViewTestCase(TestCase):
     def setUp(self):
         """Create test client, add sample data."""
 
-        User.query.delete()
-        Message.query.delete()
-
+        db.drop_all()
+        db.create_all()
+        
         self.client = app.test_client()
 
         self.testuser = User.signup(username="testuser",
                                     email="test@test.com",
                                     password="testuser",
                                     image_url=None)
-
         db.session.commit()
+
+
 
     def test_add_message(self):
         """Can use add a message?"""
@@ -57,17 +58,86 @@ class MessageViewTestCase(TestCase):
         # Since we need to change the session to mimic logging in,
         # we need to use the changing-session trick:
 
-        with self.client as c:
-            with c.session_transaction() as sess:
+        with self.client as client:
+            with client.session_transaction() as sess:
                 sess[CURR_USER_KEY] = self.testuser.id
 
             # Now, that session setting is saved, so we can have
             # the rest of ours test
 
-            resp = c.post("/messages/new", data={"text": "Hello"})
+            resp = client.post("/messages/new", data={"text": "Hello"})
 
             # Make sure it redirects
             self.assertEqual(resp.status_code, 302)
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+
+    def test_delete_message(self):
+        """Can you delete a message?"""
+
+        messageId=999
+
+        message = Message(id=messageId, user_id=self.testuser.id, text="blah blah blah")
+        db.session.add(message)
+        db.session.commit()
+
+        with self.client as client:
+            with client.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+            
+        resp = client.post(f"/messages/{messageId}/delete", follow_redirects=True)
+        html = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn(html,f'<p class="small">Messages</p><h4><a href="/users/{self.testuser.id}">1</a>')
+
+    def test_failed_add_message(self):
+        """Can you add a message if you're not logged in?"""
+
+        with self.client as client:
+
+            resp = client.post("/messages/new", data={"text": "Hello"}, follow_redirects=True)
+            html = resp.get_data(as_text=True)
+
+            self.assertEqual(resp.status_code,200)
+            self.assertIn('<p>Sign up now to get your own personalized timeline!</p>', html)
+    
+    def test_failed_delete_message(self):
+        """Can you delete a message without being signed in?"""
+        
+        messageId=999
+
+        message = Message(id=messageId, user_id=self.testuser.id, text="blah blah blah")
+        db.session.add(message)
+        db.session.commit()
+        
+        with self.client as client:
+
+            resp = client.post(f"/messages/{messageId}/delete", follow_redirects=True)
+            html = resp.get_data(as_text=True)
+
+            self.assertEqual(resp.status_code,200)
+            self.assertIn('<p>Sign up now to get your own personalized timeline!</p>', html)
+
+    def test_failed_delete_message(self):
+        """Can you delete a message while signed in as someone else?"""
+
+        messageId=999
+
+        message = Message(id=messageId, user_id=self.testuser.id, text="blah blah blah")
+        db.session.add(message)
+        db.session.commit()
+
+                
+        with self.client as client:
+            with client.session_transaction() as sess:
+                sess[CURR_USER_KEY] = 999
+            
+            resp = client.post(f"/messages/{messageId}/delete", follow_redirects=True)
+            html = resp.get_data(as_text=True)
+
+            self.assertEqual(resp.status_code,200)
+            self.assertTrue(len(Message.query.all())==1)
+
