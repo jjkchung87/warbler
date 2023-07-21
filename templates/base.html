@@ -10,6 +10,7 @@
   <script src="https://unpkg.com/jquery"></script>
   <script src="https://unpkg.com/popper"></script>
   <script src="https://unpkg.com/bootstrap"></script>
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js" integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
 
   <link rel="stylesheet"
         href="https://use.fontawesome.com/releases/v5.3.1/css/all.css">
@@ -46,7 +47,7 @@
           <img src="{{ g.user.image_url }}" alt="{{ g.user.username }}">
         </a>
       </li>
-      <li><a href="/messages/new">New Message</a></li>
+      <li><a href="#" id="openPopup">New Message</a></li>
       <li><a href="/logout">Log out</a></li>
       {% endif %}
     </ul>
@@ -56,10 +57,38 @@
   {% for category, message in get_flashed_messages(with_categories=True) %}
   <div class="alert alert-{{ category }}">{{ message }}</div>
   {% endfor %}
+  <div class="modal" id="messageModal">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <!-- AJAX content will be loaded here -->
+        <div class="modal-header">
+          <h5 class="modal-title">New Message</h5>
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="messageForm">
+            <div class="form-group">
+              <label for="message">Enter your message:</label>
+              <input type="text" class="form-control" id="message" name="message" placeholder="Enter your message">
+            </div>
+            <button type="submit" class="btn btn-primary">Send</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
 
   {% block content %}
   {% endblock %}
 
 </div>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="/static/models.js"></script>
+<script src="/static/main.js"></script>
+<script>
+    $(document).ready(function(){
+      retrieveLoggedInUserDetails()
+    })
+</script>
 </body>
 </html>

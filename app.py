@@ -1,12 +1,12 @@
 import os
 
-from flask import Flask, render_template, request, flash, redirect, session, g
+from flask import Flask, render_template, request, flash, redirect, session, g, jsonify
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 
 from forms import UserAddForm, LoginForm, MessageForm, UserUpdateForm
-from models import db, connect_db, User, Message, Follows, Likes
+from models import db, connect_db, User, Message, Follows, Likes, DEFAULT_IMG_URL
 
 CURR_USER_KEY = "curr_user"
 
@@ -99,16 +99,16 @@ def login():
     form = LoginForm()
 
 
-    if form.validate_on_submit():
-        user = User.authenticate(form.username.data,
-                                 form.password.data)
+    # if form.validate_on_submit():
+    #     user = User.authenticate(form.username.data,
+    #                              form.password.data)
 
-        if user:
-            do_login(user)
-            flash(f"Hello, {user.username}!", "success")
-            return redirect("/")
+    #     if user:
+    #         do_login(user)
+    #         flash(f"Hello, {user.username}!", "success")
+    #         return redirect("/")
 
-        flash("Invalid credentials.", 'danger')
+    #     flash("Invalid credentials.", 'danger')
 
     return render_template('users/login.html', form=form)
 
@@ -320,32 +320,30 @@ def messages_destroy(message_id):
         db.session.commit()
         return redirect(f"/users/{g.user.id}")
 
-@app.route('/users/add_like/<int:message_id>', methods=['POST'])
-def messages_like(message_id):
-    """Like a message"""
+# @app.route('/messages/<int:message_id>/like', methods=['POST'])
+# def toggle_like(message_id):
+#     """Toggle a liked message for the currently-logged-in user."""
 
+#     if not g.user:
+#         flash("Access unauthorized.", "danger")
+#         return redirect("/")
 
-    if not g.user:
-        flash("Access unauthorized","danger")
-        return redirect ('/')
-    
-    msg = Message.query.get_or_404(message_id)
+#     liked_message = Message.query.get_or_404(message_id)
+#     if liked_message.user_id == g.user.id:
+#         flash("Access unauthorized.", "danger")
+#         return redirect("/")
 
-    if msg.user_id == g.user.id:
-        flash('Cannot like own message','danger')
-        return redirect('/')
+#     user_likes = g.user.likes
 
-    liked_messages = [like.message_id for like in Likes.query.filter(Likes.user_id == g.user.id).all()]
+#     if liked_message in user_likes:
+#         g.user.likes = [like for like in user_likes if like != liked_message]
+#     else:
+#         g.user.likes.append(liked_message)
 
-    if message_id not in liked_messages:
-        g.user.likes.append(msg)
+#     db.session.commit()
 
-    else:
-        g.user.likes.remove(msg)
-        
-    db.session.commit()
-    return redirect(request.referrer)
-    
+#     return redirect("/")
+
 
 
 
@@ -394,3 +392,85 @@ def add_header(req):
     req.headers["Expires"] = "0"
     req.headers['Cache-Control'] = 'public, max-age=0'
     return req
+
+##############################################################################
+# API Routes
+
+# @app.route('/warbler/api/users', methods=['POST'])
+# def add_user():
+#     """create new user"""
+#     username = request.json['username']
+#     email = request.json['email']
+#     password = request.json['password']
+#     image_url = request.json.get('image_url', DEFAULT_IMG_URL)
+
+#     user = User.signup(usernam=username, email=email, password=password, image_url=image_url)
+#     db.session.commit()
+
+#     return jsonify(user=user.serialize())
+
+
+@app.route('/warbler/api/users/login', methods=['POST'])
+def login_endpoint():
+    """endpoint for user login"""
+    username = request.json['username']
+    password = request.json['password']
+
+    auth_user = User.authenticate(username, password)
+    likes = [like.serialize() for like in auth_user.likes]
+    
+    do_login(auth_user)
+    user_id = auth_user.id
+    messages = (Message.query.filter(or_(Message.user_id == user_id, Message.user_id.in_(db.session.query(Follows.user_being_followed_id).filter_by(user_following_id=user_id)))).order_by(Message.timestamp.desc()).limit(100).all())
+
+    return jsonify(user=auth_user.serialize(), likes=likes, messages=[message.serialize() for message in messages])
+
+@app.route('/warbler/api/users/<int:user_id>')
+def retrieve_loggedin_user_details(user_id):
+    """retrieve details of logged in user"""
+    user = User.query.get(user_id)
+    likes = [like.serialize() for like in user.likes]
+    user_id=user.id
+    messages = (Message.query.filter(or_(Message.user_id == user_id, Message.user_id.in_(db.session.query(Follows.user_being_followed_id).filter_by(user_following_id=user_id)))).order_by(Message.timestamp.desc()).limit(100).all())
+    return jsonify(user=user.serialize(), likes=likes, messages=[message.serialize() for message in messages])
+
+
+@app.route('/warbler/api/users/<int:user_id>/likes/<int:message_id>', methods=['PATCH'])
+def add_like(user_id):
+    """end-point for Liking a message"""
+    messageId = request.json['message_id']
+    user = User.query.get(user_id)
+    message = Message.query.get(messageId)
+
+    user.likes.append(message)
+    db.session.add_all([user,message])
+    db.session.commit()
+    likes = [like.serialize() for like in user.likes]
+    return jsonify(user=user.serialize(), likes=likes)
+
+@app.route('/warbler/api/users/<int:user_id>/likes/<int:message_id>', methods=['DELETE'])
+def remove_like(user_id, message_id):
+    """end-point for unliking a message"""
+    user = User.query.get(user_id)
+    message = Message.query.get(message_id)
+
+    user.likes.remove(message)
+    db.session.add(user)
+    db.session.commit()
+    likes = [like.serialize() for like in user.likes]
+    return jsonify(user=user.serialize(), likes=likes)
+
+@app.route('/warbler/api/users/<int:user_id>/messages', methods=['POST'])
+def new_message(user_id):
+    """user adds new message"""
+
+    user = User.query.get(user_id)
+    text = request.json['text']
+    newMessage = Message(text = text, 
+            user_id = user.id)
+    db.session.add_all([user, newMessage])
+    db.session.commit()
+    return jsonify(message = newMessage.serialize())
+    
+    
+

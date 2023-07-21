@@ -9,6 +9,8 @@ bcrypt = Bcrypt()
 db = SQLAlchemy()
 
 
+DEFAULT_IMG_URL = '/static/images/default-pic.png'
+
 class Follows(db.Model):
     """Connection of a follower <-> followed_user."""
 
@@ -129,6 +131,14 @@ class User(db.Model):
 
         found_user_list = [user for user in self.following if user == other_user]
         return len(found_user_list) == 1
+    
+    def serialize(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'image_url': self.image_url
+            }
 
     @classmethod
     def signup(cls, username, email, password, image_url):
@@ -198,6 +208,14 @@ class Message(db.Model):
     )
 
     user = db.relationship('User')
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'text': self.text,
+            'timestamp': self.timestamp,
+            'user_id': self.user_id
+            }
 
 
 def connect_db(app):
