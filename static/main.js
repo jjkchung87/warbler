@@ -1,5 +1,8 @@
 let currentUser = ""
 
+
+/*************************************************** */
+//log-in function
 $('#user_form').on('submit',handleLogin)
 
 async function handleLogin(evt){
@@ -15,10 +18,16 @@ async function handleLogin(evt){
 }
 
 
+/*************************************************** */
+//Retrieve user data each time page reloads/new page to store in currentUser 
+
 async function retrieveLoggedInUserDetails (){
     userId = sessionStorage.getItem('currentUserId')
     currentUser = await User.retreiveLoggedInUser(userId)
 }
+
+/*************************************************** */
+//Put messages on page
 
 async function putMessagesOnPage(){
     $('#messages').empty()
@@ -56,7 +65,8 @@ function generateMessageHtml(message){
 }
 
 
-
+/*************************************************** */
+//Like/unlike a message
 
 $('#messages').on('click','.like-button',handleLike)
 
@@ -77,24 +87,15 @@ async function handleLike(evt){
     
 }
 
+
+/*************************************************** */
+//Creating a new message (modal popup)
+
 $(document).ready(function() {
     // Event listener for opening the pop-up
     $('#openPopup').on('click', function() {
       // Show the Bootstrap modal
       $('#messageModal').modal('show');
-  
-    //   // Load AJAX content when the pop-up is triggered
-    //   $.ajax({
-    //     url: '/get_new_message_content', // Replace with your backend URL to fetch the content
-    //     method: 'GET',
-    //     success: function(data) {
-    //       // Display the fetched content inside the modal body
-    //       $('.modal-body').html(data);
-    //     },
-    //     error: function(error) {
-    //       console.error('Error loading content:', error);
-    //     }
-    //   });
     });
   
     // Event listener for submitting the form inside the pop-up
@@ -110,7 +111,5 @@ $(document).ready(function() {
         $('#messageModal').modal('hide');
     });
     
-
-
   });
   

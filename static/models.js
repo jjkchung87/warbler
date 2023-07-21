@@ -1,20 +1,6 @@
 BASE_URL = 'http://127.0.0.1:5000/warbler/api'
 DEFAULT_IMG_URL = '/static/images/default-pic.png'
 
-/*
-
-User
-- constructor
-- like message (this)
-
-Message
-- constructor
-
-Messages
-- generate message list (class)
-- Add new message (this)
-
-*/
 
 
 class Message{
@@ -49,15 +35,7 @@ class User{
         this.messages = messages.map(m => new Message(m));
     }
 
-    static async signup(username, email, password, image_url=DEFAULT_IMG_URL){
-        const data = {username, email, password, image_url}
-        const res = await axios.post(`${BASE_URL}/users/signup`, data)
-        let {user} = res.data.user
-        return new User(id = user.id,
-                        username = user.username,
-                        email = user.email)
-    }
-
+    //user logs in and new instance of User created. User ID is stored in session storage to be referenced for each page load/refresh during session to keep track of logged in user
     static async login(username, password){
         const data = {username, password}
         const res = await axios.post(`${BASE_URL}/users/login`, data)
@@ -72,6 +50,7 @@ class User{
         })
     }
 
+    //retrieves data for logged in user to re-generate instance of logged in user each time pages reloaded/refreshed
     static async retreiveLoggedInUser(id){
         const res = await axios.get(`${BASE_URL}/users/${id}`)
         const {user, likes, messages} = res.data
@@ -84,34 +63,26 @@ class User{
         })
     }
 
-    async addLike(message_id){
-        const res = await this.addOrRemoveLike("add",message_id)
-        const {likes} = res.data
-        this.likes = likes
-        console.log(likes)
 
-    }
-
-    async removeLike(message_id){
-        const res = await this.addOrRemoveLike("delete",message_id)
-        const {likes} = res.data
-        this.likes = likes
-        console.log(likes)
-
-    }
-
+    //user adds or removes message from their likes 
     async addOrRemoveLike(newState, message_id){
         const method = newState === "add" ? 'PATCH' : 'DELETE'
-        await axios({
+        const res = await axios({
             url:`${BASE_URL}/users/${this.id}/likes/${message_id}`,
             method: method
         })
+        const {likes} = res.data
+        this.likes = likes
+
     }
 
+    //check to see if a message is liked by user
     async isLiked(message){
         return this.likes.some(l => (l.id === message.id))
     }
-        
+    
+
+    //user creates a new message
     async createMessage(text){
         const data = {text}
         const res = await axios.post(`${BASE_URL}/users/${this.id}/messages`, data)
@@ -125,12 +96,4 @@ class User{
 
         this.messages.push(newMessage)
     }
-    
-    
-    // async addMessageToLikes(){
-    //     const res = await axios.post(
-    //         BASE_URL
-    //     )
-    // }
 
-}

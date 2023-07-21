@@ -396,19 +396,6 @@ def add_header(req):
 ##############################################################################
 # API Routes
 
-# @app.route('/warbler/api/users', methods=['POST'])
-# def add_user():
-#     """create new user"""
-#     username = request.json['username']
-#     email = request.json['email']
-#     password = request.json['password']
-#     image_url = request.json.get('image_url', DEFAULT_IMG_URL)
-
-#     user = User.signup(usernam=username, email=email, password=password, image_url=image_url)
-#     db.session.commit()
-
-#     return jsonify(user=user.serialize())
-
 
 @app.route('/warbler/api/users/login', methods=['POST'])
 def login_endpoint():
@@ -462,7 +449,7 @@ def remove_like(user_id, message_id):
 
 @app.route('/warbler/api/users/<int:user_id>/messages', methods=['POST'])
 def new_message(user_id):
-    """user adds new message"""
+    """end-point when user adds new message"""
 
     user = User.query.get(user_id)
     text = request.json['text']
