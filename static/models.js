@@ -22,15 +22,13 @@ class Message{
         id,
         text,
         timestamp,
-        user_id,
-        username
+        user_id
     })
     {
         this.id = id,
         this.text = text,
         this.timestamp = timestamp,
-        this.user_id = user_id,
-        this.username = username
+        this.user_id = user_id
     }
 }
 
@@ -122,8 +120,7 @@ class User{
             id: message.id,
             text: message.text,
             timestamp: message.timestamp,
-            user_id: message.user_id,
-            username: message.username
+            user_id: message.user_id
         })
 
         this.messages.push(newMessage)
